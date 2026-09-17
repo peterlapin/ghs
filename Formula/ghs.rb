@@ -1,9 +1,30 @@
 class Ghs < Formula
   desc "Short command aliases for GitHub Stack"
   homepage "https://ghstacked.com"
-  url "https://github.com/peterlapin/ghs/releases/download/v0.1.0/ghs-0.1.0.tar.gz"
-  sha256 "e48b68ea53b8c03df300703a35c83f59c20280119c69ba46f0c8ab9bf65c8bb4"
+  version "0.2.0"
   license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/peterlapin/ghs/releases/download/v0.2.0/ghs-0.2.0-darwin-arm64.tar.gz"
+      sha256 "aed574646e1625646493704d70649d8cd1c4b48390148b87e0b0ae3e5b65003e"
+    end
+    on_intel do
+      url "https://github.com/peterlapin/ghs/releases/download/v0.2.0/ghs-0.2.0-darwin-amd64.tar.gz"
+      sha256 "fbe179dc73aa533f08c8aad6cc4a4b16d63ca53280fde734188cfa9412b69576"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/peterlapin/ghs/releases/download/v0.2.0/ghs-0.2.0-linux-arm64.tar.gz"
+      sha256 "bbc9e54da25d75659924d553ec1768212d5e241e68f63ca7b349d0e13dadc650"
+    end
+    on_intel do
+      url "https://github.com/peterlapin/ghs/releases/download/v0.2.0/ghs-0.2.0-linux-amd64.tar.gz"
+      sha256 "9ad6f0c49de7216bb6faf5b0fb05a71b8d81023e4fc67899a815e1a7dedc9f56"
+    end
+  end
 
   def install
     bin.install "bin/ghs"
