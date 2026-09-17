@@ -22,7 +22,18 @@ case "${1-}" in
         ls)          shift; exec gh stack view --short "$@" ;;
         checkout|co) shift; exec gh stack checkout "$@" ;;
         restack|r)   shift; exec gh stack rebase --no-trunk "$@" ;;
-        submit|s)    shift; exec gh stack submit "$@" ;;
+        submit|s)
+          shift
+          # Help exits successfully too, but must not open a pull request.
+          for ghs_argument in "$@"; do
+            case "$ghs_argument" in
+              --) break ;;
+              -h|--help) exec gh stack submit --auto "$@" ;;
+            esac
+          done
+          gh stack submit --auto "$@" || exit $?
+          exec gh pr view --web
+          ;;
         reshape)     shift; exec gh stack modify "$@" ;;
         *)           exec gh stack "$@" ;;
       esac
@@ -38,9 +49,10 @@ printf '%s\n' \
   '  ls                    gh stack view --short' \
   '  checkout, co          gh stack checkout' \
   '  restack, r            gh stack rebase --no-trunk' \
-  '  submit, s             gh stack submit' \
+  '  submit, s             gh stack submit --auto, then gh pr view --web' \
   '  reshape               gh stack modify' \
   '' \
+  'Submit creates new PRs as drafts and opens the current branch PR on success.' \
   'All other commands and arguments pass through to gh stack unchanged.' \
   'ghs <command> --help shows upstream command help.' \
   'ghs --version shows the installed wrapper version.'

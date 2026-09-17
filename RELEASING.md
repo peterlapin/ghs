@@ -26,9 +26,9 @@ The only authored version is `GHS_VERSION` in `bin/ghs`. Packaging reads
    updating `Formula/ghs.rb`.
 5. Review the PR (or open it using the manual link in the run summary) and
    validate the **published** archive with Homebrew (below).
-   Merge the PR to make installation/upgrades available. Do not enable the
-   website's published installation state until this succeeds. For the first
-   release, also update README's bootstrap status in a follow-up change.
+   Merge the PR to make installation/upgrades available. Website updates belong
+   with the local CLI changes and do not wait for this release step. For the
+   first release, also update README's bootstrap status in a follow-up change.
 
 The default `GITHUB_TOKEN` does not trigger new push/pull-request workflows from
 its own changes. Explicitly run **CI** via workflow_dispatch on the formula PR's
@@ -91,10 +91,11 @@ authenticate or install extensions. Return the tap checkout to `main` after
 testing. The full download/install/audit path requires a published archive; local
 syntax, packaging and fake-gh tests do not establish public installability.
 
-The website lives in the separate `peterlapin/ghstacked` repository. Its current
-configuration still uses `brew install <owner>/tap/ghs` as a planned placeholder.
-After release verification, its eventual command is `brew install peterlapin/ghs/ghs`
-and setup must include the explicit tap URL above. No website changes are part
-of this implementation. The website also currently says Homebrew will install
-GitHub CLI as a dependency; that copy needs to change to reflect the requirement
-that users already have `gh` and `gh stack` installed.
+The website lives in the separate `peterlapin/ghstacked` repository, checked out
+at `../ghstacked`. Every CLI change must include a review and update of its
+command reference, examples, behavior notes, and installation instructions.
+See [AGENTS.md](AGENTS.md). Use local CLI code and version, including uncommitted
+changes, as the source of truth. Update the website in the same task without
+waiting for or checking a release or formula merge, and describe local behavior
+without release-dependent caveats. Run the website typecheck and build before
+an authorized deploy.

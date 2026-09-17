@@ -42,7 +42,7 @@ For local use before publication, run `./bin/ghs` from this checkout (or copy
 | `ls` | `gh stack view --short` |
 | `checkout`, `co` | `gh stack checkout` |
 | `restack`, `r` | `gh stack rebase --no-trunk` |
-| `submit`, `s` | `gh stack submit` |
+| `submit`, `s` | `gh stack submit --auto`, then `gh pr view --web` |
 | `reshape` | `gh stack modify` |
 
 Every other command passes through unchanged, including `init`, `add`, `view`,
@@ -62,8 +62,17 @@ ghs create --help          # gh stack add --help
 version. These work without `gh` and outside a repository. Command-specific help
 is forwarded to upstream with the same mapping and flags as normal execution.
 
+`ghs submit` (or `ghs s`) skips the PR details editor and creates new PRs as
+drafts by default. After submission succeeds, it opens the current branch's PR
+in your system browser. Existing PRs retain their draft status; passing the
+upstream `--open` flag explicitly marks PRs ready for review. Help (`--help` or
+`-h`) and failed submissions never open the browser. A browser-opening failure
+returns a nonzero exit status even though submission has already succeeded.
+
 Arguments, standard streams, terminal interaction, working directory, environment,
-and exit status are forwarded through `exec`. GHS does not capture upstream output,
+and exit status are forwarded to GitHub CLI. Commands use `exec`, except that
+submit first waits for `gh stack submit --auto` to succeed before opening the PR.
+GHS does not capture upstream output,
 check authentication, or probe extensions on invocation. Missing `gh` gets an
 actionable error; all other upstream errors are left to GitHub CLI.
 
@@ -76,9 +85,9 @@ extension. Older versions may reject newer flags; GHS adds no compensating Git l
 Mappings were checked on 2026-09-17 against the official
 [command reference](https://docs.github.com/en/pull-requests/reference/stacked-prs-cli-commands)
 and [upstream README](https://github.com/github/gh-stack). No mapping discrepancies
-were found. Local `gh stack --help` could not be checked because the extension was
-not installed. With an installed extension, use `gh stack <command> --help` to
-check supported arguments.
+were found. Submit draft behavior was also checked against the installed
+extension's `gh stack submit --help`. Use `gh stack <command> --help` to check
+supported arguments.
 
 ## Upgrades and removal
 
