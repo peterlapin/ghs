@@ -17,8 +17,14 @@ Dir.mktmpdir("ghs-formula-") do |directory|
 
   formula.define_singleton_method(:prefix) { |*| temporary/"prefix" }
   Dir.chdir(temporary/"ghs-#{formula.version}") { formula.install }
-  passed = system({ "GHS_UNDER_TEST" => (formula.bin/"ghs").to_s },
+  # Homebrew sanitizes PATH; retain access to the test runner's optional jq.
+  test_env = { "GHS_UNDER_TEST" => (formula.bin/"ghs").to_s,
+               "PATH" => ARGV.fetch(0, ENV.fetch("PATH")) }
+  passed = system(test_env,
                   "/bin/bash", (root/"tests/ghs.sh").to_s)
   raise "Installed wrapper tests failed" unless passed
+  passed = system(test_env,
+                  "/bin/bash", (root/"tests/add.sh").to_s)
+  raise "Installed guided add tests failed" unless passed
 end
 puts "Homebrew install method and installed-wrapper tests passed in a temporary prefix."

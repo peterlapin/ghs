@@ -1,5 +1,133 @@
 #!/bin/bash
 
+# Guided add reads upstream metadata; only gh-stack writes stack state.
+ghs_add() (
+  fail() { printf 'ghs: %s\n' "$*" >&2; exit 1; }
+  prompt() {
+    printf '%s' "$1" >&2
+    IFS= read -r reply || fail 'Add cancelled; no further changes made.'
+  }
+
+  current=$(git symbolic-ref --quiet --short HEAD) || fail 'Run add on a local branch in a Git repository.'
+  git_dir=$(git rev-parse --git-common-dir) || exit $?
+  [ -f "$git_dir/gh-stack" ] || fail 'No local stack found. Run ghs init first.'
+  command -v jq >/dev/null 2>&1 || fail 'Guided add requires jq. Install it with brew install jq, or use gh stack add directly.'
+  state=$(jq -ce '
+    select(.schemaVersion == 1 and (.stacks | type == "array") and
+      all(.stacks[]; (.trunk.branch | type == "string") and
+        (.branches | type == "array") and
+        all(.branches[]; (.branch | type == "string"))))
+  ' "$git_dir/gh-stack") || fail 'Cannot read supported gh-stack metadata; use gh stack directly.'
+  if printf '%s\n' "$state" | jq -e --arg current "$current" 'any(.stacks[]; .trunk.branch == $current)' >/dev/null; then
+    fail 'Current branch is a stack trunk. Check out the intended stack tip before running ghs add.'
+  fi
+
+  branches=()
+  ancestors=()
+  parent=
+  while IFS= read -r branch; do
+    [ -n "$branch" ] || continue
+    git show-ref --verify --quiet "refs/heads/$branch" || continue
+    branches+=("$branch")
+    if [ "$branch" = "$current" ]; then
+      parent=$current
+    elif git merge-base --is-ancestor "refs/heads/$branch" HEAD; then
+      ancestors+=("$branch")
+    fi
+  done < <(printf '%s\n' "$state" | jq -r '[.stacks[].branches[].branch] | unique[]')
+  [ "${#branches[@]}" -gt 0 ] || fail 'No local stack branches found. Run ghs init first.'
+
+  if [ -z "$parent" ]; then
+    # Keep only the nearest ancestors. Equal tips or merged lineages are ambiguous.
+    candidates=()
+    for branch in "${ancestors[@]}"; do
+      nearest=true
+      for other in "${ancestors[@]}"; do
+        if [ "$(git rev-parse "refs/heads/$branch")" != "$(git rev-parse "refs/heads/$other")" ] &&
+            git merge-base --is-ancestor "refs/heads/$branch" "refs/heads/$other"; then
+          nearest=false
+          break
+        fi
+      done
+      [ "$nearest" = false ] || candidates+=("$branch")
+    done
+    if [ "${#candidates[@]}" -eq 1 ]; then
+      parent=${candidates[0]}
+      printf 'Attaching %s above %s.\n' "$current" "$parent" >&2
+    else
+      printf 'Cannot determine a unique parent for %s. Local stack branches:\n' "$current" >&2
+      printf '  %s\n' "${branches[@]}" >&2
+      prompt 'Parent branch (exact name): '
+      for branch in "${branches[@]}"; do
+        [ "$reply" != "$branch" ] || parent=$branch
+      done
+      [ -n "$parent" ] || fail 'Choose an existing local stack branch.'
+    fi
+  fi
+
+  stacks=$(printf '%s\n' "$state" | jq -c --arg parent "$parent" \
+    '[.stacks[] | select(any(.branches[]; .branch == $parent))]') || exit $?
+  [ "$(printf '%s\n' "$stacks" | jq length)" -eq 1 ] || fail 'Parent belongs to multiple stacks; use gh stack directly.'
+  top=$(printf '%s\n' "$stacks" | jq -r '.[0].branches[-1].branch')
+  [ "$parent" = "$top" ] || fail "Cannot add above $parent in the middle of a stack. Use ghs reshape, or add from the top branch $top."
+  if printf '%s\n' "$stacks" | jq -e 'all(.[0].branches[]; .pullRequest.merged == true)' >/dev/null; then
+    fail 'This stack is fully merged. Run ghs init to start a new stack.'
+  fi
+
+  if [ "$parent" != "$current" ]; then
+    git merge-base "refs/heads/$parent" HEAD >/dev/null || fail 'The selected parent has no common history with this branch.'
+    changes=$(git status --porcelain) || exit $?
+    [ -z "$changes" ] || fail 'Commit or stash your changes before attaching an existing branch.'
+    # A failed add or interruption must not leave the user on the parent branch.
+    trap 'status=$?; if [ "$(git symbolic-ref --quiet --short HEAD)" != "$current" ]; then
+      git checkout --quiet "$current" || { printf "ghs: Could not return to %s.\n" "$current" >&2; status=1; }
+    fi; exit "$status"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    git checkout --quiet "$parent" || exit $?
+    gh stack add -- "$current"
+    exit $?
+  fi
+
+  printf 'Current branch %s is already in the stack.\n' "$current" >&2
+  prompt 'Commit [1] staged changes or [2] all changes, including untracked files? [1]: '
+  flags=()
+  case "$reply" in
+    ''|1|staged)
+      git diff --cached --quiet
+      status=$?
+      [ "$status" -eq 1 ] || fail 'No staged changes to commit, or Git could not read the index.'
+      ;;
+    2|all)
+      changes=$(git status --porcelain) || exit $?
+      [ -n "$changes" ] || fail 'No changes to commit.'
+      flags=(-A)
+      ;;
+    *) fail 'Choose 1 (staged) or 2 (all).' ;;
+  esac
+  base=$(printf '%s\n' "$stacks" | jq -r '.[0] | if (.branches | length) > 1 then .branches[-2].branch else .trunk.branch end')
+  base_head=$(git rev-parse --verify "refs/heads/$base") || exit $?
+  current_head=$(git rev-parse HEAD) || exit $?
+  if [ "$base_head" = "$current_head" ]; then
+    new_branch=$current
+    printf '%s has no commits beyond %s. gh-stack will commit here; no new branch is created.\n' "$current" "$base" >&2
+  else
+    prompt 'New branch name: '
+    new_branch=$reply
+    if ! git check-ref-format "refs/heads/$new_branch" >/dev/null ||
+        ! git check-ref-format --branch "$new_branch" >/dev/null; then
+      fail 'Invalid branch name.'
+    fi
+    if git show-ref --verify --quiet "refs/heads/$new_branch"; then
+      fail 'That branch already exists; choose a new branch name.'
+    fi
+  fi
+  prompt 'Commit message: '
+  message=$reply
+  case "$message" in *[![:space:]]*) ;; *) fail 'Commit message cannot be empty.' ;; esac
+  exec gh stack add "${flags[@]}" -m "$message" -- "$new_branch"
+)
+
 case "${1-}" in
   --version)
     # Single source of truth for the wrapper and release version.
@@ -16,8 +144,16 @@ case "${1-}" in
         exit 127
       fi
 
-      # Dispatch: translate only wrapper aliases; pass all other commands through.
+      # Dispatch wrapper workflows and aliases; pass all other commands through.
       case "$1" in
+        add)
+          shift
+          if [ "$#" -eq 0 ]; then
+            ghs_add
+            exit $?
+          fi
+          exec gh stack add "$@"
+          ;;
         create|c)    shift; exec gh stack add "$@" ;;
         ls)          shift; exec gh stack view --short "$@" ;;
         checkout|co) shift; exec gh stack checkout "$@" ;;
@@ -59,6 +195,7 @@ printf '%s\n' \
   'Usage: ghs <command> [arguments...]' \
   '' \
   'Aliases                 Runs' \
+  '  add                   Attach the current branch or prompt for a new layer' \
   '  create, c             gh stack add' \
   '  ls                    gh stack view --short' \
   '  checkout, co          gh stack checkout' \
@@ -68,6 +205,7 @@ printf '%s\n' \
   '' \
   'Submit creates new PRs as drafts and opens the current branch PR on success.' \
   'submit --interactive runs the original gh stack submit without opening the browser.' \
+  'Bare add needs jq; add with arguments and create/c pass through to gh stack add.' \
   'All other commands and arguments pass through to gh stack unchanged.' \
   'ghs <command> --help shows upstream command help.' \
   'ghs --version shows the installed wrapper version.'

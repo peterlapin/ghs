@@ -73,7 +73,10 @@ for mode in bare arguments help; do
     open_pr=yes check s submit --auto
   fi
   check reshape modify
-  for native in init add view switch up down top bottom trunk rebase sync push merge link modify unstack unknown update --unknown ''; do
+  if [ "$mode" != bare ]; then
+    check add add
+  fi
+  for native in init view switch up down top bottom trunk rebase sync push merge link modify unstack unknown update --unknown ''; do
     check "$native" "$native"
   done
 done

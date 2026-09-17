@@ -31,6 +31,16 @@ jobs:
             fi
           fi
           shellcheck --version
+      - name: Install jq for guided add checks
+        run: |
+          if ! command -v jq >/dev/null; then
+            if [ "$RUNNER_OS" = macOS ]; then
+              brew install jq
+            else
+              sudo apt-get update
+              sudo apt-get install -y jq
+            fi
+          fi
       - name: Check wrapper and release packaging
         # Explicit /bin/bash exercises macOS's bundled Bash 3.2.
         run: /bin/bash scripts/check.sh

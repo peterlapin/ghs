@@ -22,6 +22,11 @@ The formula installs only GHS and does not install or manage either prerequisite
 GHS runs on macOS's bundled Bash 3.2 and Linux Bash; no language runtime or package
 manager is needed to run it.
 
+The guided `ghs add` flow additionally requires `jq` to read gh-stack's local
+metadata: install it separately with `brew install jq` (or your Linux package
+manager). Explicit commands such as `ghs add feature-name` and all other commands
+do not require jq. GHS never installs dependencies automatically.
+
 If your existing GitHub CLI setup is incomplete, configure it separately,
 **only if needed**:
 
@@ -38,6 +43,8 @@ For local use before publication, run `./bin/ghs` from this checkout (or copy
 
 | GHS command | Runs |
 | --- | --- |
+| `add` without arguments | Attach the current branch or guide creation of a new layer |
+| `add <arguments>` | `gh stack add <arguments>` |
 | `create`, `c` | `gh stack add` |
 | `ls` | `gh stack view --short` |
 | `checkout`, `co` | `gh stack checkout` |
@@ -46,13 +53,14 @@ For local use before publication, run `./bin/ghs` from this checkout (or copy
 | `submit --interactive`, `s --interactive` | `gh stack submit` |
 | `reshape` | `gh stack modify` |
 
-Every other command passes through unchanged, including `init`, `add`, `view`,
+Every other command passes through unchanged, including `init`, `view`,
 `switch`, `up`, `down`, `top`, `bottom`, `trunk`, `rebase`, `sync`, `push`, `merge`,
 `link`, `modify`, and `unstack`. In particular, `ghs modify` retains the upstream
 stack-restructuring behaviour. Unknown commands are handled by upstream too.
 
 ```sh
 ghs create -Am "Add login"
+ghs add                   # Attach this branch or prompt for the next layer
 ghs ls
 ghs restack --upstack
 ghs submit
@@ -63,6 +71,37 @@ ghs create --help          # gh stack add --help
 `ghs` and `ghs --help` show wrapper help. `ghs --version` shows the installed GHS
 version. These work without `gh` and outside a repository. Command-specific help
 is forwarded to upstream with the same mapping and flags as normal execution.
+
+### Guided add
+
+Run `ghs add` without arguments in a repository with an existing stack:
+
+- On an untracked branch, GHS finds the nearest tracked ancestor. If there is
+  exactly one, it checks out that parent and runs `gh stack add <current-branch>`
+  to adopt the branch, returning to it afterward. If ancestry is ambiguous or no
+  tracked ancestor exists, it asks for a parent branch. Git does not record a
+  definitive parent branch, so detection uses the current commit graph.
+- On a tracked stack tip, choose **staged** (the default) or **all**, then enter
+  a new branch name and a separate commit message. Staged runs
+  `gh stack add -m "message" <branch>`; all runs
+  `gh stack add -A -m "message" <branch>`, including untracked files. If the
+  current tip has no commits beyond its parent, GHS explains that upstream will
+  commit on the current branch and skips the branch-name prompt.
+
+Upstream supports adding only above the stack tip. For a parent in the middle,
+GHS stops and suggests `ghs reshape`. Check out a stack tip before using guided
+add from a trunk. Attaching an existing branch requires a clean working tree;
+GHS does not stash changes or force a checkout. If attachment fails, it attempts
+to return to the original branch and preserves the upstream failure status.
+Prompts can be cancelled with Ctrl+C or end-of-input before any mutation. If a
+commit fails after a new layer is created, that layer remains for recovery.
+
+GHS only reads gh-stack's schema-v1 metadata; gh-stack performs all stack writes
+and commits. Use `ghs create`/`ghs c`, or `ghs add` with explicit arguments, for
+direct upstream behavior without detection or GHS prompts. `ghs add --help`
+continues to show upstream help.
+
+### Submit
 
 `ghs submit` (or `ghs s`) skips the PR details editor and creates new PRs as
 drafts by default. After submission succeeds, it opens the current branch's PR
@@ -77,8 +116,9 @@ The PR details editor is available in an interactive terminal. GHS removes
 `--interactive` and forwards any other arguments unchanged; put it before `--`.
 
 Arguments, standard streams, terminal interaction, working directory, environment,
-and exit status are forwarded to GitHub CLI. Commands use `exec`, except that
-submit first waits for `gh stack submit --auto` to succeed before opening the PR.
+and exit status are forwarded to GitHub CLI. Most commands use `exec`; guided
+add performs local detection and prompts, and submit waits for
+`gh stack submit --auto` to succeed before opening the PR.
 GHS does not capture upstream output,
 check authentication, or probe extensions on invocation. Missing `gh` gets an
 actionable error; all other upstream errors are left to GitHub CLI.
@@ -87,7 +127,8 @@ actionable error; all other upstream errors are left to GitHub CLI.
 and rebasing onto trunk, and rebases stack branches onto each other; upstream
 flags determine scope. GHS adds no repository metadata; GitHub Stack maintains
 its own state. Compatibility and command behaviour follow the installed upstream
-extension. Older versions may reject newer flags; GHS adds no compensating Git logic.
+extension. Older versions may reject newer flags. Guided add additionally reads
+the upstream metadata schema and uses Git ancestry to select a parent.
 
 Mappings were checked on 2026-09-17 against the official
 [command reference](https://docs.github.com/en/pull-requests/reference/stacked-prs-cli-commands)
@@ -122,8 +163,10 @@ GitHub CLI, authentication and the extension remain separately managed.
 /bin/bash scripts/check.sh
 ```
 
-Tests inject a fake `gh` through PATH and never contact GitHub or mutate a real
-repository. Checks cover exact arguments, command help, shell metacharacters,
+Tests require jq, inject a fake `gh` through PATH, and never contact GitHub or
+mutate the working repository. Guided add tests create disposable Git repositories
+to check ancestry, parent selection, worktrees, prompts, cancellation, and recovery.
+Checks cover exact arguments, command help, shell metacharacters,
 process handoff, streams, exit codes, missing dependencies, archive contents,
 checksums, repeatable packaging and the extracted executable. Bash syntax checks
 always run. Offline release-PR tests cover automatic creation, a manual fallback,

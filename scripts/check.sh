@@ -10,6 +10,7 @@ else
   printf 'ShellCheck unavailable; skipped locally (required in CI).\n'
 fi
 bash tests/ghs.sh
+bash tests/add.sh
 bash tests/release.sh
 bash scripts/package.sh
 version=$(bin/ghs --version)
@@ -25,13 +26,14 @@ printf '%s\n' "${archive%.tar.gz}/bin/ghs" "${archive%.tar.gz}/README.md" "${arc
 cmp "$tmp/expected" "$tmp/files"
 tar -xzf "dist/$archive" -C "$tmp"
 GHS_UNDER_TEST="$tmp/${archive%.tar.gz}/bin/ghs" bash tests/ghs.sh
+GHS_UNDER_TEST="$tmp/${archive%.tar.gz}/bin/ghs" bash tests/add.sh
 read -r checksum _ < "dist/$archive.sha256"
 grep -Fq "sha256 \"$checksum\"" dist/ghs.rb
 grep -Fq "releases/download/v${version#ghs }/$archive" dist/ghs.rb
 ruby -c dist/ghs.rb
 if command -v brew >/dev/null 2>&1; then
   HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_DEVELOPER=1 \
-    brew ruby tests/formula.rb
+    brew ruby tests/formula.rb "$PATH"
 else
   printf 'Homebrew unavailable; formula execution skipped.\n'
 fi

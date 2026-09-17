@@ -12,6 +12,7 @@ class Ghs < Formula
   def caveats
     <<~EOS
       GitHub CLI (gh) and the github/gh-stack extension must already be installed.
+      Guided ghs add also requires jq: brew install jq
       If gh is installed but not yet configured, run these separately:
         gh auth login
         gh extension install github/gh-stack
