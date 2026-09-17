@@ -85,6 +85,43 @@ check submit submit --auto
 check s submit --auto
 extra=(-- --help)
 open_pr=yes check submit submit --auto
+extra=(-- --interactive)
+open_pr=yes check submit submit --auto
+open_pr=yes check s submit --auto
+
+# The wrapper-only flag is removed wherever it appears before --.
+check_interactive() {
+  printf '%s\0' stack submit "${extra[@]}" > "$tmp/expected"
+  : > "$tmp/calls"
+  : > "$tmp/args"
+  "$wrapper" "$command" "$@" > "$tmp/stdout" 2> "$tmp/stderr"
+  cmp "$tmp/expected" "$tmp/args" || fail 'interactive submit arguments'
+  [ "$(cat "$tmp/calls")" = call ] || fail 'interactive submit opened browser'
+  if [ -s "$tmp/stdout" ] || [ -s "$tmp/stderr" ]; then
+    fail 'extra output for interactive submit'
+  fi
+}
+
+for command in submit s; do
+  for mode in bare arguments help short_help; do
+    # shellcheck disable=SC2016
+    case "$mode" in
+      bare) extra=() ;;
+      arguments) extra=(--remote 'two words' '' '$HOME' '*' $'line\nbreak') ;;
+      help) extra=(--help) ;;
+      short_help) extra=(-h) ;;
+    esac
+    check_interactive --interactive "${extra[@]}"
+    check_interactive "${extra[@]}" --interactive
+  done
+  extra=(-- --interactive)
+  check_interactive --interactive "${extra[@]}"
+  : > "$tmp/calls"
+  status=0
+  GHS_TEST_EXIT=42 "$wrapper" "$command" --interactive || status=$?
+  [ "$status" -eq 42 ] || fail 'interactive submit exit status not preserved'
+  [ "$(cat "$tmp/calls")" = call ] || fail 'browser opened after interactive failure'
+done
 
 for command in submit s; do
   : > "$tmp/calls"
@@ -110,6 +147,15 @@ cmp "$tmp/context" "$tmp/expected-context"
 cmp "$tmp/input" "$tmp/stdout"
 [ "$(cat "$tmp/stderr")" = 'upstream stderr' ] || fail 'stderr not preserved'
 
+# Interactive submit hands the terminal directly to gh, just like passthrough.
+GHS_TEST_IO=yes "$wrapper" submit --interactive < "$tmp/input" > "$tmp/stdout" 2> "$tmp/stderr" &
+child=$!
+wait "$child"
+printf '%s\n' "$PWD" "$GHS_TEST_ENV" "$child" > "$tmp/expected-context"
+cmp "$tmp/context" "$tmp/expected-context"
+cmp "$tmp/input" "$tmp/stdout"
+[ "$(cat "$tmp/stderr")" = 'upstream stderr' ] || fail 'interactive submit stderr not preserved'
+
 # Submit leaves upstream streams connected while waiting to open the browser.
 GHS_TEST_IO=yes "$wrapper" submit < "$tmp/input" > "$tmp/stdout" 2> "$tmp/stderr"
 cmp "$tmp/input" "$tmp/stdout"
@@ -120,6 +166,7 @@ PATH="$tmp/empty" "$wrapper" --help > "$tmp/help-flag"
 cmp "$tmp/help" "$tmp/help-flag"
 grep -q 'Usage: ghs' "$tmp/help"
 grep -q 'rebase --no-trunk' "$tmp/help"
+grep -q 'submit --interactive' "$tmp/help"
 PATH="$tmp/empty" "$wrapper" --version > "$tmp/version"
 grep -Eq '^ghs [0-9]+\.[0-9]+\.[0-9]+$' "$tmp/version"
 status=0

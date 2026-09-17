@@ -24,6 +24,20 @@ case "${1-}" in
         restack|r)   shift; exec gh stack rebase --no-trunk "$@" ;;
         submit|s)
           shift
+          ghs_interactive=false
+          ghs_submit_args=()
+          while [ "$#" -gt 0 ]; do
+            case "$1" in
+              --interactive) ghs_interactive=true ;;
+              --) ghs_submit_args+=("$@"); break ;;
+              *) ghs_submit_args+=("$1") ;;
+            esac
+            shift
+          done
+          set -- "${ghs_submit_args[@]}"
+          if [ "$ghs_interactive" = true ]; then
+            exec gh stack submit "$@"
+          fi
           # Help exits successfully too, but must not open a pull request.
           for ghs_argument in "$@"; do
             case "$ghs_argument" in
@@ -53,6 +67,7 @@ printf '%s\n' \
   '  reshape               gh stack modify' \
   '' \
   'Submit creates new PRs as drafts and opens the current branch PR on success.' \
+  'submit --interactive runs the original gh stack submit without opening the browser.' \
   'All other commands and arguments pass through to gh stack unchanged.' \
   'ghs <command> --help shows upstream command help.' \
   'ghs --version shows the installed wrapper version.'

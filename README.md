@@ -43,6 +43,7 @@ For local use before publication, run `./bin/ghs` from this checkout (or copy
 | `checkout`, `co` | `gh stack checkout` |
 | `restack`, `r` | `gh stack rebase --no-trunk` |
 | `submit`, `s` | `gh stack submit --auto`, then `gh pr view --web` |
+| `submit --interactive`, `s --interactive` | `gh stack submit` |
 | `reshape` | `gh stack modify` |
 
 Every other command passes through unchanged, including `init`, `add`, `view`,
@@ -55,6 +56,7 @@ ghs create -Am "Add login"
 ghs ls
 ghs restack --upstack
 ghs submit
+ghs submit --interactive   # Original submit with the PR details editor
 ghs create --help          # gh stack add --help
 ```
 
@@ -68,6 +70,11 @@ in your system browser. Existing PRs retain their draft status; passing the
 upstream `--open` flag explicitly marks PRs ready for review. Help (`--help` or
 `-h`) and failed submissions never open the browser. A browser-opening failure
 returns a nonzero exit status even though submission has already succeeded.
+
+Use `ghs submit --interactive` (or `ghs s --interactive`) for the original
+upstream submit behavior: GHS adds no `--auto` flag and does not open the browser.
+The PR details editor is available in an interactive terminal. GHS removes
+`--interactive` and forwards any other arguments unchanged; put it before `--`.
 
 Arguments, standard streams, terminal interaction, working directory, environment,
 and exit status are forwarded to GitHub CLI. Commands use `exec`, except that
