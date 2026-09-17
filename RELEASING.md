@@ -1,13 +1,14 @@
 # Maintaining releases
 
-The only authored version is `GHS_VERSION` in `bin/ghs`. Packaging reads
-`bin/ghs --version`; tags, asset names and formula versions follow it.
+The only authored version is `VERSION`, embedded in the Go executable. Packaging
+reads the same file; tags, asset names and formula versions follow it. Use the
+Go toolchain specified in `go.mod` for checks and release builds.
 
 ## First release and subsequent releases
 
 1. Review the changes and run `/bin/bash scripts/check.sh`. For later releases,
-   first increment `GHS_VERSION` (plain `major.minor.patch`). For the first release,
-   the prepared version is `0.1.0`.
+   first increment `VERSION` (plain `major.minor.patch`). Never reuse a published
+   version, including when migrating the implementation from Bash to Go.
 2. Commit and push the reviewed files to `main` **when publication is authorized**.
    This implementation task does not push or publish anything.
 3. For automatic formula PR creation, in repository Settings → Actions → General,
@@ -22,7 +23,7 @@ The only authored version is `GHS_VERSION` in `bin/ghs`. Packaging reads
 4. Intentionally run **Release** from the Actions UI on the default branch (or
    `gh workflow run release.yml --repo peterlapin/ghs --ref main`). It runs macOS
    and Linux checks, then builds on Linux, creates tag `v<version>` at the checked
-   commit, publishes the archive/checksum/formula, and opens a PR adding or
+   commit, publishes four binary archives with checksums and the formula, and opens a PR adding or
    updating `Formula/ghs.rb`.
 5. Review the PR (or open it using the manual link in the run summary) and
    validate the **published** archive with Homebrew (below).
@@ -39,28 +40,32 @@ commit; do not bypass branch protections. See GitHub's
 When fixing a failed check, push the fix and start a **new** Release run on `main`.
 Re-running an old failed run uses its original commit, so it cannot pick up the fix.
 
-## Archive and formula bootstrap
+## Binary archives and formula
 
 `bash scripts/package.sh` writes these ignored, local artifacts:
 
-- `dist/ghs-<version>.tar.gz`
-- `dist/ghs-<version>.tar.gz.sha256`
+- `dist/ghs-<version>-<os>-<arch>.tar.gz`
+- `dist/ghs-<version>-<os>-<arch>.tar.gz.sha256`
 - `dist/ghs.rb` (rendered from `Formula/ghs.rb.in` with the actual checksum)
 
-The archive contains only `bin/ghs`, `README.md` and the existing MIT `LICENSE`.
+The targets are `darwin-arm64`, `darwin-amd64`, `linux-arm64`, and `linux-amd64`.
+The formula selects the correct URL and checksum for the user's OS and CPU.
+Every archive contains only the compiled `bin/ghs`, `README.md`, and MIT `LICENSE`.
+Builds disable cgo and VCS stamping, trim source paths, and remove the build ID.
 Fixed file order, modes, timestamps, ownership and gzip headers make repeated
-builds reproducible with the same tar/gzip toolchain. Both BSD tar (macOS) and GNU
+builds reproducible with the same Go and tar/gzip toolchains. Both BSD tar (macOS) and GNU
 tar (Linux) are supported; the published bytes always come from the Linux release
 job. Formula changes cannot change the archive or create a checksum cycle.
 
 Do not copy an unpublished local formula into `Formula/ghs.rb` and present it as
-installable. There is intentionally no live formula before the first publication.
+installable. Keep the published formula unchanged until the release workflow
+generates its update from the new archives.
 Never replace an existing release archive: version bumps produce new URLs.
 
 If publication succeeds but PR creation fails, retain the published assets and
 fix permissions. Download the published `ghs.rb` and checksum with
 `gh release download v<version> --repo peterlapin/ghs --dir <empty-directory>`,
-verify the archive using `shasum -a 256 -c ghs-<version>.tar.gz.sha256`, and open
+verify the matching archive using `shasum -a 256 -c ghs-<version>-<os>-<arch>.tar.gz.sha256`, and open
 or finish the formula PR manually from those exact assets. Do not rebuild or
 overwrite the release; the workflow refuses an existing tag. If a partial release
 is unusable, inspect it and publish a new version instead of silently replacing it.
@@ -79,13 +84,14 @@ With that PR checked out, run:
 
 ```sh
 brew style peterlapin/ghs/ghs
-brew install --build-from-source peterlapin/ghs/ghs
+brew install peterlapin/ghs/ghs
 brew test peterlapin/ghs/ghs
 brew audit --strict peterlapin/ghs/ghs
 ```
 
-The formula installs only the wrapper; `gh` and `gh-stack` are user-managed
-prerequisites, not Homebrew dependencies of GHS. Its test uses a fake `gh`
+The formula installs only the compiled executable; `gh` and `gh-stack` are user-managed
+prerequisites, not Homebrew dependencies of GHS. Go and jq are not runtime
+dependencies. Its test uses a fake `gh`
 and works offline without credentials or the extension. Installation must never
 authenticate or install extensions. Return the tap checkout to `main` after
 testing. The full download/install/audit path requires a published archive; local

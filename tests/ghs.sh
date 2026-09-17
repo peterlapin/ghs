@@ -3,7 +3,7 @@
 set -eo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-wrapper=${GHS_UNDER_TEST:-$root/bin/ghs}
+wrapper=${GHS_UNDER_TEST:-$root/build/ghs}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/bin" "$tmp/empty" "$tmp/work"

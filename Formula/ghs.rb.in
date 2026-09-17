@@ -1,9 +1,30 @@
 class Ghs < Formula
   desc "Short command aliases for GitHub Stack"
   homepage "https://ghstacked.com"
-  url "https://github.com/peterlapin/ghs/releases/download/v@VERSION@/ghs-@VERSION@.tar.gz"
-  sha256 "@SHA256@"
+  version "@VERSION@"
   license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/peterlapin/ghs/releases/download/v@VERSION@/ghs-@VERSION@-darwin-arm64.tar.gz"
+      sha256 "@SHA256-darwin-arm64@"
+    end
+    on_intel do
+      url "https://github.com/peterlapin/ghs/releases/download/v@VERSION@/ghs-@VERSION@-darwin-amd64.tar.gz"
+      sha256 "@SHA256-darwin-amd64@"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/peterlapin/ghs/releases/download/v@VERSION@/ghs-@VERSION@-linux-arm64.tar.gz"
+      sha256 "@SHA256-linux-arm64@"
+    end
+    on_intel do
+      url "https://github.com/peterlapin/ghs/releases/download/v@VERSION@/ghs-@VERSION@-linux-amd64.tar.gz"
+      sha256 "@SHA256-linux-amd64@"
+    end
+  end
 
   def install
     bin.install "bin/ghs"
@@ -12,7 +33,6 @@ class Ghs < Formula
   def caveats
     <<~EOS
       GitHub CLI (gh) and the github/gh-stack extension must already be installed.
-      Guided ghs add also requires jq: brew install jq
       If gh is installed but not yet configured, run these separately:
         gh auth login
         gh extension install github/gh-stack

@@ -19,6 +19,9 @@ bash -n "$tmp/formula-step.sh"
 cat > "$tmp/bin/git" <<'FAKE'
 #!/bin/bash
 printf '%s\n' "$*" >> "$RELEASE_GIT_LOG"
+if [ "$1" = ls-remote ] && [ "${RELEASE_TAG_EXISTS:-0}" = 1 ]; then
+  printf 'abc123\trefs/tags/v%s\n' "$VERSION"
+fi
 if [ "$1" = push ] && [ "$RELEASE_PUSH_FAIL" = 1 ]; then
   exit 1
 fi
@@ -62,3 +65,32 @@ for scenario in automatic manual push-failure; do
   fi
 done
 printf 'Release PR success, manual fallback and push-failure checks passed.\n'
+
+# The publish step must upload exactly the four platform archives/checksums,
+# never stale archives left in dist from the former Bash release format.
+ruby -ryaml -e '
+  workflow = YAML.load_file(ARGV.fetch(0))
+  step = workflow.fetch("jobs").fetch("publish").fetch("steps").find do |item|
+    item["name"] == "Publish versioned archive"
+  end
+  puts step.fetch("run")
+' "$root/.github/workflows/release.yml" > "$tmp/publish-step.sh"
+work="$tmp/publish"
+mkdir -p "$work/dist"
+export RELEASE_GIT_LOG="$work/git.log" RELEASE_GH_LOG="$work/gh.log"
+export RELEASE_PR_STATUS=0 RELEASE_PUSH_FAIL=0 RELEASE_TAG_EXISTS=0 GITHUB_SHA=abc123
+(cd "$work" && bash -eo pipefail "$tmp/publish-step.sh")
+for platform in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
+  grep -Fq "dist/ghs-$VERSION-$platform.tar.gz dist/ghs-$VERSION-$platform.tar.gz.sha256" "$work/gh.log"
+done
+grep -Fq 'dist/ghs.rb --target abc123' "$work/gh.log"
+if grep -Fq "dist/ghs-$VERSION.tar.gz" "$work/gh.log"; then
+  printf 'Published an obsolete archive name\n' >&2
+  exit 1
+fi
+: > "$work/gh.log"
+status=0
+(cd "$work" && RELEASE_TAG_EXISTS=1 bash -eo pipefail "$tmp/publish-step.sh") > "$work/output" 2>&1 || status=$?
+[ "$status" -ne 0 ]
+[ ! -s "$work/gh.log" ]
+printf 'Platform upload and existing-tag refusal checks passed.\n'

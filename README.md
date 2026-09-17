@@ -1,14 +1,9 @@
 # ghs
 
-A small Bash wrapper around GitHub's official [`gh stack`](https://github.com/github/gh-stack)
+A small Go CLI around GitHub's official [`gh stack`](https://github.com/github/gh-stack)
 extension. Website: [ghstacked.com](https://ghstacked.com).
 
 ## Installation
-
-**First-release bootstrap:** no release has been published yet. The commands below
-become usable after the first release is published and its formula PR is merged.
-`Formula/ghs.rb.in` is a template, not an installable formula. See
-[RELEASING.md](RELEASING.md) for the publication steps.
 
 ```sh
 brew tap peterlapin/ghs https://github.com/peterlapin/ghs.git
@@ -19,13 +14,9 @@ The explicit Git URL is required because this repository is named `ghs`, not
 `homebrew-ghs`. The fully qualified formula name avoids collisions with other taps.
 GitHub CLI (`gh`) and its `github/gh-stack` extension must already be installed.
 The formula installs only GHS and does not install or manage either prerequisite.
-GHS runs on macOS's bundled Bash 3.2 and Linux Bash; no language runtime or package
-manager is needed to run it.
-
-The guided `ghs add` flow additionally requires `jq` to read gh-stack's local
-metadata: install it separately with `brew install jq` (or your Linux package
-manager). Explicit commands such as `ghs add feature-name` and all other commands
-do not require jq. GHS never installs dependencies automatically.
+GHS ships as a compiled executable for macOS and Linux, on arm64 and amd64.
+Git, GitHub CLI, and gh-stack are the runtime prerequisites. Go and jq are not
+required to run GHS. GHS never installs dependencies automatically.
 
 If your existing GitHub CLI setup is incomplete, configure it separately,
 **only if needed**:
@@ -36,8 +27,8 @@ gh extension install github/gh-stack
 ```
 
 Neither installation nor invocation of GHS performs this setup automatically.
-For local use before publication, run `./bin/ghs` from this checkout (or copy
-`bin/ghs` into a directory on your PATH).
+For local use, build with Go using `go build -o build/ghs .`, then run
+`./build/ghs` (or copy that executable into a directory on your PATH).
 
 ## Commands
 
@@ -159,17 +150,26 @@ GitHub CLI, authentication and the extension remain separately managed.
 
 ## Development
 
+Install the Go version specified in `go.mod`. The CLI uses only the Go standard
+library, with no third-party modules or CLI framework. `VERSION` is embedded in
+the binary and is the single source of truth for the GHS version.
+
 ```sh
+go build -o build/ghs .
+./build/ghs --help
 /bin/bash scripts/check.sh
 ```
 
-Tests require jq, inject a fake `gh` through PATH, and never contact GitHub or
+Go unit tests cover metadata parsing, parent selection, flags, and exit codes.
+Behavior tests inject a fake `gh` through PATH and never contact GitHub or
 mutate the working repository. Guided add tests create disposable Git repositories
 to check ancestry, parent selection, worktrees, prompts, cancellation, and recovery.
 Checks cover exact arguments, command help, shell metacharacters,
 process handoff, streams, exit codes, missing dependencies, archive contents,
-checksums, repeatable packaging and the extracted executable. Bash syntax checks
-always run. Offline release-PR tests cover automatic creation, a manual fallback,
+checksums, repeatable packaging and the extracted executable. Checks include
+`go vet`, race-enabled Go tests, and signal forwarding/recovery tests. Bash is
+used only for development/release scripts and the behavior test harness, which
+also receive syntax and ShellCheck checks. Offline release-PR tests cover automatic creation, a manual fallback,
 and branch-push failures. ShellCheck runs when installed locally and is required
 by macOS/Linux CI. Ruby is used for workflow parsing and Homebrew formula checks.
 When Homebrew is available, checks also load its formula DSL, verify the archive

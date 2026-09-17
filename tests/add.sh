@@ -2,10 +2,9 @@
 set -eo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-wrapper=${GHS_UNDER_TEST:-$root/bin/ghs}
+wrapper=${GHS_UNDER_TEST:-$root/build/ghs}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-command -v jq >/dev/null || { printf 'Guided add tests require jq.\n' >&2; exit 1; }
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
 mkdir "$tmp/bin"
@@ -13,6 +12,9 @@ cat > "$tmp/bin/gh" <<'FAKE'
 #!/bin/bash
 printf '%s\0' "$@" >> "$GHS_ADD_ARGS"
 git symbolic-ref --short HEAD >> "$GHS_ADD_BRANCHES"
+if [ "${GHS_ADD_ECHO:-}" = yes ]; then
+  while IFS= read -r line; do printf '%s\n' "$line"; done
+fi
 exit "${GHS_ADD_EXIT:-0}"
 FAKE
 chmod +x "$tmp/bin/gh"
@@ -53,7 +55,9 @@ expect_failure() {
 # Adopt from the nearest tracked ancestor without changing commits or metadata.
 new_repo
 git branch lower main
-jq '.stacks[0].branches |= [{branch:"lower"}] + .' .git/gh-stack > "$tmp/state"
+cat > "$tmp/state" <<'JSON'
+{"schemaVersion":1,"stacks":[{"trunk":{"branch":"main"},"branches":[{"branch":"lower"},{"branch":"A"}]}]}
+JSON
 cp "$tmp/state" .git/gh-stack
 git checkout -qb B
 git commit -qm B --allow-empty
@@ -85,7 +89,9 @@ grep -q 'middle of a stack' "$tmp/stderr"
 # Equal tips in separate stacks need a choice; cancellation has no side effects.
 new_repo
 git branch other A
-jq '.stacks += [{trunk:{branch:"main"},branches:[{branch:"other"}]}]' .git/gh-stack > "$tmp/state"
+cat > "$tmp/state" <<'JSON'
+{"schemaVersion":1,"stacks":[{"trunk":{"branch":"main"},"branches":[{"branch":"A"}]},{"trunk":{"branch":"main"},"branches":[{"branch":"other"}]}]}
+JSON
 cp "$tmp/state" .git/gh-stack
 git checkout -qb B
 run_add < /dev/null
@@ -134,6 +140,14 @@ Include all changes
 INPUT
 [ "$status" -eq 0 ] || fail 'all flow failed'
 expect_call -A -m 'Include all changes' -- feature/all
+GHS_ADD_ECHO=yes run_add <<'INPUT'
+1
+feature/stdin
+Keep input available
+input for the child
+INPUT
+[ "$status" -eq 0 ]
+[ "$(cat "$tmp/stdout")" = 'input for the child' ] || fail 'prompts swallowed child stdin'
 run_add <<< invalid
 expect_failure
 run_add <<< staged
@@ -203,11 +217,11 @@ run_add < /dev/null
 expect_call -- B
 [ "$(git branch --show-current)" = B ] || fail 'worktree branch not restored'
 
-# Missing jq has an actionable error, without affecting explicit passthrough.
+# Guided add only needs Git and gh on PATH: no jq or language runtime.
 mkdir "$tmp/no-jq"
 ln -s "$(command -v git)" "$tmp/no-jq/git"
 ln -s "$tmp/bin/gh" "$tmp/no-jq/gh"
 PATH="$tmp/no-jq" run_add < /dev/null
-expect_failure
-grep -q 'brew install jq' "$tmp/stderr"
+[ "$status" -eq 0 ] || fail 'guided add required a runtime or jq'
+expect_call -- B
 printf 'Guided add tests passed.\n'
