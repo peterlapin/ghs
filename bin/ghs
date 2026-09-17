@@ -1,0 +1,46 @@
+#!/bin/bash
+
+case "${1-}" in
+  --version)
+    # Single source of truth for the wrapper and release version.
+    GHS_VERSION=0.1.0
+    printf 'ghs %s\n' "$GHS_VERSION"
+    exit 0
+    ;;
+  --help)
+    ;;
+  *)
+    if [ "$#" -gt 0 ]; then
+      if ! command -v gh >/dev/null 2>&1; then
+        printf '%s\n' 'ghs: GitHub CLI (gh) is required. Install it with: brew install gh (or visit https://cli.github.com).' >&2
+        exit 127
+      fi
+
+      # Dispatch: translate only wrapper aliases; pass all other commands through.
+      case "$1" in
+        create|c)    shift; exec gh stack add "$@" ;;
+        ls)          shift; exec gh stack view --short "$@" ;;
+        checkout|co) shift; exec gh stack checkout "$@" ;;
+        restack|r)   shift; exec gh stack rebase --no-trunk "$@" ;;
+        submit|s)    shift; exec gh stack submit "$@" ;;
+        reshape)     shift; exec gh stack modify "$@" ;;
+        *)           exec gh stack "$@" ;;
+      esac
+    fi
+    ;;
+esac
+
+printf '%s\n' \
+  'Usage: ghs <command> [arguments...]' \
+  '' \
+  'Aliases                 Runs' \
+  '  create, c             gh stack add' \
+  '  ls                    gh stack view --short' \
+  '  checkout, co          gh stack checkout' \
+  '  restack, r            gh stack rebase --no-trunk' \
+  '  submit, s             gh stack submit' \
+  '  reshape               gh stack modify' \
+  '' \
+  'All other commands and arguments pass through to gh stack unchanged.' \
+  'ghs <command> --help shows upstream command help.' \
+  'ghs --version shows the installed wrapper version.'

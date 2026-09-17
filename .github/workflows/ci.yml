@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install ShellCheck
+        run: |
+          if ! command -v shellcheck >/dev/null; then
+            if [ "$RUNNER_OS" = macOS ]; then
+              brew install shellcheck
+            else
+              sudo apt-get update
+              sudo apt-get install -y shellcheck
+            fi
+          fi
+      - name: Check wrapper and release packaging
+        # Explicit /bin/bash exercises macOS's bundled Bash 3.2.
+        run: /bin/bash scripts/check.sh

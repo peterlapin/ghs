@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build release and formula
+        run: |
+          bash scripts/package.sh
+          version=$(bin/ghs --version)
+          version=${version#ghs }
+          printf 'VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+      - name: Publish versioned archive
+        run: |
+          # Refuse to overwrite an existing tag or release.
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ]; then
+            echo "Tag v$VERSION already exists; see RELEASING.md for recovery." >&2
+            exit 1
+          fi
+          gh release create "v$VERSION" \
+            "dist/ghs-$VERSION.tar.gz" "dist/ghs-$VERSION.tar.gz.sha256" dist/ghs.rb \
+            --target "$GITHUB_SHA" --title "ghs $VERSION" \
+            --notes 'Bash aliases for GitHub Stack. See README.md for setup and installation. Homebrew availability requires merging the formula-update PR.'
+      - name: Open formula-update pull request
+        run: |
+          branch="codex/ghs-formula-v$VERSION"
+          git switch -c "$branch"
+          cp dist/ghs.rb Formula/ghs.rb
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Formula/ghs.rb
+          git commit -m "Update Homebrew formula to ghs $VERSION"
+          git push origin "$branch"
+          cat > "$RUNNER_TEMP/formula-pr.md" <<EOF
+          Point Homebrew at the published ghs $VERSION runtime archive and its calculated SHA-256 checksum.
+
+          The release passed macOS and Linux checks. Review Formula/ghs.rb and run the published-archive Homebrew checks in RELEASING.md before merging. This PR uses GITHUB_TOKEN, so it does not trigger pull_request workflows automatically.
+          EOF
+          gh pr create --base "$DEFAULT_BRANCH" --head "$branch" \
+            --title "Homebrew: ghs $VERSION" --body-file "$RUNNER_TEMP/formula-pr.md"
