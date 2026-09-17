@@ -59,5 +59,19 @@ jobs:
 
           The release passed macOS and Linux checks. Review Formula/ghs.rb and run the published-archive Homebrew checks in RELEASING.md before merging. This PR uses GITHUB_TOKEN, so it does not trigger pull_request workflows automatically.
           EOF
-          gh pr create --base "$DEFAULT_BRANCH" --head "$branch" \
-            --title "Homebrew: ghs $VERSION" --body-file "$RUNNER_TEMP/formula-pr.md"
+          if gh pr create --base "$DEFAULT_BRANCH" --head "$branch" \
+            --title "Homebrew: ghs $VERSION" --body-file "$RUNNER_TEMP/formula-pr.md"; then
+            echo "Release published. Review and merge the Homebrew formula PR to enable installation." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Release published and formula branch pushed, but automatic PR creation failed. Open the PR using the link in the run summary."
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Manual Homebrew PR required
+
+          The release was published and the formula is ready on \`$branch\`.
+          GitHub could not create the PR automatically (for example, Actions-created PRs may be disabled).
+
+          [Open the formula PR](https://github.com/$GH_REPO/compare/$DEFAULT_BRANCH...$branch?expand=1), review it, and merge it to enable Homebrew installation.
+
+          To enable automatic PR creation for future releases, enable **Allow GitHub Actions to create and approve pull requests** in Settings → Actions → General.
+          EOF
+          fi

@@ -110,9 +110,10 @@ Tests inject a fake `gh` through PATH and never contact GitHub or mutate a real
 repository. Checks cover exact arguments, command help, shell metacharacters,
 process handoff, streams, exit codes, missing dependencies, archive contents,
 checksums, repeatable packaging and the extracted executable. Bash syntax checks
-always run; ShellCheck runs when installed locally and is required by macOS/Linux
-CI. Ruby is used only for Homebrew formula checks. When Homebrew is available,
-checks also load its formula DSL, verify the archive checksum, install into a
-temporary prefix and run the wrapper tests there.
+always run. Offline release-PR tests cover automatic creation, a manual fallback,
+and branch-push failures. ShellCheck runs when installed locally and is required
+by macOS/Linux CI. Ruby is used for workflow parsing and Homebrew formula checks.
+When Homebrew is available, checks also load its formula DSL, verify the archive
+checksum, install into a temporary prefix and run the wrapper tests there.
 
 MIT licensed; see [LICENSE](LICENSE).

@@ -12,6 +12,7 @@ permissions:
 jobs:
   check:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -29,6 +30,7 @@ jobs:
               sudo apt-get install -y shellcheck
             fi
           fi
+          shellcheck --version
       - name: Check wrapper and release packaging
         # Explicit /bin/bash exercises macOS's bundled Bash 3.2.
         run: /bin/bash scripts/check.sh

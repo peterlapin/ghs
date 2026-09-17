@@ -10,8 +10,11 @@ The only authored version is `GHS_VERSION` in `bin/ghs`. Packaging reads
    the prepared version is `0.1.0`.
 2. Commit and push the reviewed files to `main` **when publication is authorized**.
    This implementation task does not push or publish anything.
-3. In repository Settings → Actions → General, allow GitHub Actions to create
-   pull requests. Organization policy must permit it. The release job requests
+3. For automatic formula PR creation, in repository Settings → Actions → General,
+   enable **Allow GitHub Actions to create and approve pull requests**.
+   Organization policy must permit it. If PR creation is blocked, the release
+   finishes with a warning and a manual PR link in the run summary instead.
+   The release job requests
    `contents: write` to publish releases and push a formula branch, and
    `pull-requests: write` to open its PR. Checks only need `contents: read`.
    No personal access token is needed. Branch rules must allow the bot to create
@@ -21,7 +24,8 @@ The only authored version is `GHS_VERSION` in `bin/ghs`. Packaging reads
    and Linux checks, then builds on Linux, creates tag `v<version>` at the checked
    commit, publishes the archive/checksum/formula, and opens a PR adding or
    updating `Formula/ghs.rb`.
-5. Review the PR and validate the **published** archive with Homebrew (below).
+5. Review the PR (or open it using the manual link in the run summary) and
+   validate the **published** archive with Homebrew (below).
    Merge the PR to make installation/upgrades available. Do not enable the
    website's published installation state until this succeeds. For the first
    release, also update README's bootstrap status in a follow-up change.
@@ -31,6 +35,9 @@ its own changes. Explicitly run **CI** via workflow_dispatch on the formula PR's
 branch if needed. Required PR checks may need that manual run or a maintainer
 commit; do not bypass branch protections. See GitHub's
 [workflow triggering rules](https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-when-your-workflow-runs/triggering-a-workflow).
+
+When fixing a failed check, push the fix and start a **new** Release run on `main`.
+Re-running an old failed run uses its original commit, so it cannot pick up the fix.
 
 ## Archive and formula bootstrap
 

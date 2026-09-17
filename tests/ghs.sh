@@ -36,7 +36,9 @@ check() {
   "$wrapper" "$input" "${extra[@]}" > "$tmp/stdout" 2> "$tmp/stderr"
   cmp "$tmp/expected" "$tmp/args" || fail "arguments for $input"
   [ "$(cat "$tmp/calls")" = call ] || fail "extra gh invocation for $input"
-  [ ! -s "$tmp/stdout" ] && [ ! -s "$tmp/stderr" ] || fail "extra output for $input"
+  if [ -s "$tmp/stdout" ] || [ -s "$tmp/stderr" ]; then
+    fail "extra output for $input"
+  fi
 }
 
 # Test each mapping with no arguments, tricky arguments, and upstream help.

@@ -10,6 +10,7 @@ else
   printf 'ShellCheck unavailable; skipped locally (required in CI).\n'
 fi
 bash tests/ghs.sh
+bash tests/release.sh
 bash scripts/package.sh
 version=$(bin/ghs --version)
 archive="ghs-${version#ghs }.tar.gz"
