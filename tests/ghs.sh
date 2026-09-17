@@ -41,9 +41,9 @@ check() {
 
 # Test each mapping with no arguments, tricky arguments, and upstream help.
 for mode in bare arguments help; do
+  # shellcheck disable=SC2016
   case "$mode" in
     bare) extra=() ;;
-    # shellcheck disable=SC2016
     arguments) extra=('two words' '"double" and '\''single'\''' '' '--flag=value' '*' '; touch SENTINEL' '$(touch SENTINEL)' '`touch SENTINEL`' '$HOME' $'line\nbreak' '--' '-x') ;;
     help) extra=(--help) ;;
   esac
