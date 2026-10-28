@@ -1,8 +1,8 @@
 class Ghs < Formula
   desc "Short command aliases for GitHub Stack"
   homepage "https://ghstacked.com"
-  url "https://github.com/peterlapin/ghs/releases/download/v0.1.0/ghs-0.1.0.tar.gz"
-  sha256 "e48b68ea53b8c03df300703a35c83f59c20280119c69ba46f0c8ab9bf65c8bb4"
+  url "https://github.com/peterlapin/ghs/archive/refs/tags/v0.2.0.tar.gz"
+  sha256 "7941d80f0189940145bdcaebb89f5bd1c8b26856421e24d45c9ab1c6f3014797"
   license "MIT"
 
   def install
